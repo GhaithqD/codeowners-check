@@ -37320,6 +37320,13 @@ async function run() {
         for await (const { data: files } of octokit.paginate.iterator(octokit.rest.pulls.listFiles, { owner, repo, pull_number: prNumber, per_page: 100 })) {
             for (const f of files) {
                 changedFiles.push(f.filename);
+                // A rename removes the file from its old path, so the old path's
+                // owners must approve too. Otherwise moving a file out of an owned
+                // directory (e.g. `secure/auth.ts` -> `misc/auth.ts`) would only be
+                // checked against the destination's owners.
+                if (f.previous_filename && f.previous_filename !== f.filename) {
+                    changedFiles.push(f.previous_filename);
+                }
             }
         }
         info(`Changed files: ${changedFiles.join(', ')}`);

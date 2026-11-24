@@ -567,6 +567,76 @@ describe('main.ts', () => {
     )
   })
 
+  it('requires approval from the owners of a renamed file’s old path', async () => {
+    core.getInput.mockImplementation((name: string) => {
+      if (name === 'github-token') return 'fake-token'
+      if (name === 'codeowners-contents')
+        return 'secure/ @security-owner\nmisc/ @misc-owner\n'
+      return ''
+    })
+
+    gh.getOctokit.mockReturnValue(
+      gh.buildMockOctokit({
+        listReviews: jest.fn<() => Promise<unknown>>().mockResolvedValue({
+          data: [{ user: { login: 'misc-owner' }, state: 'APPROVED' }]
+        }),
+        listFiles: jest.fn<() => Promise<unknown>>().mockResolvedValue({
+          data: [
+            {
+              filename: 'misc/auth.ts',
+              previous_filename: 'secure/auth.ts',
+              status: 'renamed'
+            }
+          ]
+        })
+      })
+    )
+
+    await run()
+
+    expect(core.setFailed).toHaveBeenCalledWith(
+      expect.stringContaining('secure/auth.ts: requires approval from')
+    )
+    expect(core.setOutput).toHaveBeenCalledWith(
+      'files-missing-approver',
+      JSON.stringify(['secure/auth.ts'])
+    )
+  })
+
+  it('passes a rename once owners of both paths have approved', async () => {
+    core.getInput.mockImplementation((name: string) => {
+      if (name === 'github-token') return 'fake-token'
+      if (name === 'codeowners-contents')
+        return 'secure/ @security-owner\nmisc/ @misc-owner\n'
+      return ''
+    })
+
+    gh.getOctokit.mockReturnValue(
+      gh.buildMockOctokit({
+        listReviews: jest.fn<() => Promise<unknown>>().mockResolvedValue({
+          data: [
+            { user: { login: 'misc-owner' }, state: 'APPROVED' },
+            { user: { login: 'security-owner' }, state: 'APPROVED' }
+          ]
+        }),
+        listFiles: jest.fn<() => Promise<unknown>>().mockResolvedValue({
+          data: [
+            {
+              filename: 'misc/auth.ts',
+              previous_filename: 'secure/auth.ts',
+              status: 'renamed'
+            }
+          ]
+        })
+      })
+    )
+
+    await run()
+
+    expect(core.setFailed).not.toHaveBeenCalled()
+    expect(core.info).toHaveBeenCalledWith('CODEOWNERS check passed.')
+  })
+
   it('uses codeowners-contents instead of fetching from the API', async () => {
     core.getInput.mockImplementation((name: string) => {
       if (name === 'github-token') return 'fake-token'

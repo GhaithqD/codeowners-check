@@ -170,6 +170,13 @@ export async function run(): Promise<void> {
     )) {
       for (const f of files) {
         changedFiles.push(f.filename)
+        // A rename removes the file from its old path, so the old path's
+        // owners must approve too. Otherwise moving a file out of an owned
+        // directory (e.g. `secure/auth.ts` -> `misc/auth.ts`) would only be
+        // checked against the destination's owners.
+        if (f.previous_filename && f.previous_filename !== f.filename) {
+          changedFiles.push(f.previous_filename)
+        }
       }
     }
     core.info(`Changed files: ${changedFiles.join(', ')}`)
